@@ -33,7 +33,7 @@ class sshuploader:
 
             self.transport = paramiko.Transport((host, port))
             self.transport.connect(username = id, password = passwd)
-                
+
             self.sftpclient = paramiko.SFTPClient.from_transport(self.transport)
 
         except Exception("Fisrt ssh connection was failed..") as e:
@@ -105,7 +105,6 @@ class sshuploader:
         return None
 
     def compare_entries(self):
-        
         return None
 
 
@@ -137,7 +136,9 @@ if __name__ == "__main__":
     uplaoder.compa
     if mode is 1:
     else if mode is 2:
+        return None
     else:
+        return None
 
 
 
