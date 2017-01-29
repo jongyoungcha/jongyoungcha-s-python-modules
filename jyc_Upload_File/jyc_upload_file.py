@@ -1,6 +1,7 @@
 import sys
 import paramiko
 import os
+import json
 
 class sshuploader:
     transport = None
@@ -9,57 +10,95 @@ class sshuploader:
     host = None
     id = None
     passwd = None
+    config_file_path = None
     localbasepath = None
     remotebasepath = None
-    uploadfile = None
+    uploaded_file = None
+    remote_file = None
 
-    def __init__(self, host, port, id, passwd, localbasepath, remotebasepath, uploadfile):
+    def __init__(self, config_file_path, uploaded_file):
         try:
-            print("host:{0}".format(host))
-            print("port:{0}".format(port))
-            print("id:{0}".format(id))
-            print("passwd:{0}".format(passwd))
-            print("localbasepath:{0}".format(localbasepath))
-            print("remotebasepath:{0}".format(remotebasepath))
+            # Check file was existing
+            self.config_file_path = config_file_path
+            if os.path.exists(config_file_path) is None:
+                return None
 
-            self.host = host
-            self.port = port
-            self.id = id
-            self.passwd = passwd
-            self.localbasepath = localbasepath
-            self.remotebasepath = remotebasepath
-            self.uploadfile = uploadfile
+            self.uploaded_file = uploaded_file
+            print("uploaded file : {0}".format(self.uploaded_file))
 
+            # Parse config
+            if self.parse_config_file(config_file_path) == False:
+                print('>>>>parse_config_file() was failed...')
+                sys.exit()
 
-            self.transport = paramiko.Transport((host, port))
-            self.transport.connect(username = id, password = passwd)
+            # Connect to server
+            self.transport = paramiko.Transport((self.host, int(self.port)))
+            self.transport.connect(username=self.id, password=self.passwd)
+            self.connect_ssh();
 
-            self.sftpclient = paramiko.SFTPClient.from_transport(self.transport)
+            if self.check_config() == False:
+                print('>>>>check_config() was failed...')
 
-        except Exception("Fisrt ssh connection was failed..") as e:
+        except SSHException("ssh connection error") as e:
             print(e)
+
+        except ssh_exception.AuthenticationException as e:
+            print(e)
+
+
+    def check_config(self):
+        print(">>>> In check_config()")
+        # check remote base path
+        ret = True
+        if not os.path.exists(self.localbasepath):
+            print("local base path is not exists.")
+            return ret
+
+        # check local base path
+        try:
+            self.sftpclient.stat(self.remotebasepath)
+        except IOError as e:
+            # print("No such file{0}", str(e))
+            return False
+
+        # check upload file path
+        if self.uploaded_file.find(self.localbasepath) is -1:
+            return False
+        else:
+            relative_path = self.uploaded_file.replace(self.localbasepath, "")
+
+        # set remote path
+        self.remote_file = "{0}/{1}".format(self.remotebasepath, relative_path)
+        print(self.remote_file)
+
+        return True
 
 
     def connect_ssh(self):
-        try:
-            self.sshclient = paramiko.SSHClient()
-            self.sshclient.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            self.sshclient.connect(self.host, self.port, self.id, self.passwd)
-        except Exception("Connecting the remote server was failed...") as e:
-            print(e)
+        self.sshclient = paramiko.SSHClient()
+        self.sshclient.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.sshclient.connect(self.host, self.port, self.id, self.passwd)
 
-
-
-    def disconnect_ssh(self):
-        if sshclient:
-            self.sshclient.close()
-
+        self.sftpclient = paramiko.SFTPClient.from_transport(self.transport)
         return None
 
 
+    def disconnect_ssh(self):
+        self.sshclient.close()
+        return None
 
-    def get_remote_entries(self):
-        if(self.sshclient):
+
+    def get_local_entries(self):
+        if self.localbasepath != None:
+            for path, dirs, files in os.walk(self.localbasepath):
+                print("path:{0}".format(path))
+                for name in files:
+                    fullpath=os.path.join(path, name)
+                    print(fullpath)
+
+
+    def get_remote_entries(self, remotepath, result):
+        if(self.client):
             recved = ""
             alldata = None
             stdin, stdout, stderr = self.client.exec_command("find " + remotepath + " -type f -exec sha1sum {} \;")
@@ -71,74 +110,117 @@ class sshuploader:
                     while prevdata:
                         prevdata = stdout.channel.recv(200000)
                         alldata += prevdata
+                        print(str(alldata, 'utf8'))
 
                     recved += str(alldata, 'utf8')
 
-            dic_entries = {}
-            lst_entries = []
+            dic = {}
+            entries = []
+            array = []
             for entry in recved.split('\n'):
                 if entry is not '':
                     arr1=re.split(' .', entry)
-
                     print(arr1[0])
                     print(arr1[1])
                     print("===================================")
 
-                    dic_entries.update({arr1[1]:arr1[0]})
+                    dic.update({arr1[1]:arr1[0]})
 
-            for key, value in dic_entries.items():
+            for key, value in dic.items():
                 print(key, value)
 
         else:
             print("Connection not opened.")
 
 
+    def parse_config_file(self, config_file_path):
+        print(">>>> In parse_config_file()")
 
-    def get_local_entries(self):
-        if self.localbasepath != None:
-            for path, dirs, files in os.walk(self.localbasepath):
-                print("path:{0}".format(path))
-                for name in files:
-                    fullpath=os.path.join(path, name)
-                    print(fullpath)
+        config_file = open(config_file_path, 'r')
+        config_json = json.loads(config_file.read())
+        config_file.close()
+
+        self.host = config_json['host']
+        self.port = int(config_json['port'])
+        self.id = config_json['id']
+        self.passwd = config_json['passwd']
+        self.localbasepath = os.path.dirname(self.config_file_path)
+        if self.localbasepath == '.' :
+            self.localbasepath = os.getcwd()
+
+        self.remotebasepath = config_json['remote_base_path']
+
+        print("host : {0}".format(self.host))
+        print("port : {0}".format(self.port))
+        print("id : {0}".format(self.id))
+        print("passwd : {0}".format(self.passwd))
+        print("remotepath : {0}".format(self.remotebasepath))
+        print("localbaseapth : {0}".format(self.localbasepath))
 
         return None
 
-    def compare_entries(self):
+    
+    def upload_file(self):
+        if (self.uploaded_file):
+            self.uploaded_file = self.uploaded_file.replace("."+os.sep, self.localbasepath+os.sep)
+
+        self.remote_file = "{0}/{1}".format(self.remotebasepath, self.uploaded_file.replace(self.localbasepath, ""))
+
+        print(">>>> Uploading local_path{0} ||||| remote_path : {1}".format(self.uploaded_file, self.remote_file))
+
+        self.sftpclient.put(self.uploaded_file, self.remote_file)
+
+
         return None
 
 
-    def upload_differ_entries(self):
-        return None
+def main():
+    print("Starting upload file.....")
+    mode = None
+    uploader = None
+    uploaded_file = None
+
+    print(sys.argv[0])
+    print(sys.argv[1])
+    print(sys.argv[2])
 
 
-    def compare_n_upload(self):
-        return None
+    if len(sys.argv) == 2:
+        mode = 1
+        config_file_path = sys.argv[1]
+    elif len(sys.argv) == 3:
+        mode = 2
+        config_file_path = sys.argv[1]
+        uploaded_file = sys.argv[2]
+        print("loaded file :",uploaded_file)
+    else:
+        print("the count of arguments was invalid.")
+        return -1
 
+
+    if os.path.exists(config_file_path) is False:
+        print("config file was not existing")
+        return -1
+
+    if os.path.exists(config_file_path) is False:
+        print("uploaded  not existing")
+        return -1
+
+
+    if mode is 1:
+        print(">>>>> this mode is directoy compare")
+        uploader = sshuploader(config_file_path)
+    elif mode is 2:
+        print(">>>>> this mode is file uploader")
+        uploader = sshuploader(config_file_path, uploaded_file)
+        uploader.upload_file()
 
 
 if __name__ == "__main__":
-    print("main")
+    exit(main())
 
-    mode=argv[0]
-    host=argv[1]
-    port=argv[2]
-    id=argv[3]
-    passwd=argv[4]
-    local_path=argv[5]
-    remote_path=argv[6]
-    file_to_upload=argv[7]
 
-    uploader = sshuploader(host, port, id, passwd, local_path, remote_path, file_to_upload)
-    uploader.get_files_from_local()
-    uploader.get_local_entries()
-    uploader.connect_ssh()
-    uplaoder.compa
-    if mode is 1:
-    else if mode is 2:
-        return None
-    else:
-        return None
+
 
 
 
