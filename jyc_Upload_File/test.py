@@ -12,36 +12,41 @@ class sshuploader:
     passwd = None
     localbasepath = None
     remotebasepath = None
+    uploaded_file = None
 
-    def __init__(self, host, port, id, passwd, localbasepath, remotebasepath):
+    def __init__(self, config_file_path, uploaded_file):
         try:
-            print("host:{0}".format(host))
-            print("port:{0}".format(port))
-            print("id:{0}".format(id))
-            print("passwd:{0}".format(passwd))
-            print("localbasepath:{0}".format(localbasepath))
-            print("remotebasepath:{0}".format(remotebasepath))
+            # Check file was existing
+            if os.path.exists(config_file_path) is None:
+                return None
 
-            self.host = host
-            self.port = port
-            self.id = id
-            self.passwd = passwd
-            self.localbasepath = localbasepath
-            self.remotebasepath = remotebasepath
+            self.parse_config_file(config_file_path)
+            uploaded_file = uploaded_file
 
-            self.transport = paramiko.Transport((host, port))
-            self.transport.connect(username = id, password = passwd)
+            print("host:{0}".format(self.host))
+            print("port:{0}".format(self.port))
+            print("id:{0}".format(self.id))
+            print("passwd:{0}".format(self.passwd))
+            print("localbasepath:{0}".format(self.localbasepath))
+            print("remotebasepath:{0}".format(self.remotebasepath))
+
+            self.transport = paramiko.Transport((self.host, int(self.port)))
+            self.transport.connect(username=self.id, password=self.passwd)
 
             self.sftpclient = paramiko.SFTPClient.from_transport(self.transport)
 
         except SSHException("ssh connection error") as e:
             print(e)
 
+        except ssh_exception.AuthenticationException as e:
+            print(e)
+
+
 
     def connect_ssh(self):
         self.sshclient = paramiko.SSHClient()
         self.sshclient.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.sshclient.connect("192.168.120.82", 22, "root", "dusrn001")
+        self.sshclient.connect(self.host, self.port, self.id, self.passwd)
         return None
 
 
@@ -91,26 +96,43 @@ class sshuploader:
             for key, value in dic.items():
                 print(key, value)
 
-
         else:
             print("Connection not opened.")
 
 
-    def parse_config_file(self):
+    def parse_config_file(self, config_file_path):
+        config_file = open(config_file_path, 'r')
+        config_json = json.loads(config_file.read())
+        config_file.close()
+
+        print(config_json)
+
+        self.host = config_json['host']
+        self.port = config_json['port']
+        self.id = config_json['id']
+        self.passwd = config_json['passwd']
+        print(config_json['passwd'])
+        print(config_json['local_base_path'])
+        print(config_json['remote_base_path'])
+
         return
+
+    def upload_file(self):
+        return None
 
 
 def main():
-    print("main")
+    print("Starting upload file.....")
+    mode = None
     uploader = None
 
-    if len(sys.argv) == 1:
-        config_file_path = argv[1]
-
-    elif len(sys.argv) == 2:
-        config_file_path = argv[1]
-        uploaded_file = argv[2]
-
+    if len(sys.argv) == 2:
+        mode = 1
+        config_file_path = sys.argv[1]
+    elif len(sys.argv) == 3:
+        mode = 2
+        config_file_path = sys.argv[1]
+        uploaded_file = sys.argv[2]
     else:
         print("the count of arguments was invalid.")
         return -1
@@ -124,10 +146,13 @@ def main():
         return -1
 
 
-    os.path.exists(config_file_path)
 
-    uploader.get_local_entries();
-    uploader.connect_ssh()
+    if mode is 1:
+        uploader = sshuploader(config_file_path);
+
+    elif mode is 2:
+        uploader = sshuploader(config_file_path, uploaded_file);
+        uploader.
 
 
 if __name__ == "__main__":
@@ -136,28 +161,6 @@ if __name__ == "__main__":
 
 
 
-    # if len(sys.argv) == 7:
-    #     mode = sys.argv[0]
-    #     host = sys.argv[1]
-    #     port = sys.argv[2]
-    #     id = sys.argv[3]
-    #     passwd = argv[4]
-    #     localbasepath = argv[5]
-    #     remotebasepath = argv[6]
-    #     uploader = sshuploader(host, port, id, passwd, localbasepath, remotebasepath)
-
-    # elif len(sys.argv) == 8:
-    #     mode = sys.argv[0]
-    #     host = sys.argv[1]
-    #     port = sys.argv[2]
-    #     id = sys.argv[3]
-    #     passwd = sys.argv[4]
-    #     localbasepath = sys.argv[5]
-    #     remotebasepath = sys.argv[6]
-    #     uploadedfile = argv[7]
-    #     uploader = sshuploader(host, port, id, passwd, localbasepath, remotebasepath, uploadedfile)
-    # else:
-    #     print("Arguments count was failed ( At least, please input 7 or 8 ). ")
 
 
 

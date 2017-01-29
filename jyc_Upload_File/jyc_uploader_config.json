@@ -1,10 +1,8 @@
 {
-  "host" : "192.168.120.82",
+  "host" : "192.168.0.5",
   "port" : "22",
-  "id" : "root",
-  "passwd" : "dusrn001",
+  "id" : "jongyoungcha",
+  "passwd" : "a0319705971",
   "local_base_path" : "d:/Source/Python",
-  "remote_base_path" : "/home/jongyoungcha/Python",
+  "remote_base_path" : "/home/jongyoungcha/Python"
 }
-
-
